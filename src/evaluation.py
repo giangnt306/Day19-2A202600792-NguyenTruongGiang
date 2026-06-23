@@ -1,11 +1,11 @@
 import pandas as pd
 import os
 
-def run_evaluation(flat_rag, graph_rag, output_path='outputs/evaluation.csv'):
+def evaluate_systems(standard_rag_engine, graph_rag_engine, output_csv_path='outputs/evaluation.csv'):
     """
-    Chạy 20 câu hỏi benchmark và lưu kết quả ra file csv.
+    Executes benchmark queries across both RAG configurations and exports results to a CSV report.
     """
-    questions = [
+    benchmark_queries = [
         "Công ty Apple có trụ sở ở đâu?",
         "Ai là CEO của Google?",
         "Bill Gates là người sáng lập công ty nào?",
@@ -28,26 +28,26 @@ def run_evaluation(flat_rag, graph_rag, output_path='outputs/evaluation.csv'):
         "Mountain View là nơi đặt trụ sở của công ty công nghệ nào?"
     ]
     
-    results = []
-    print(f"[*] Running evaluation on {len(questions)} benchmark questions...")
+    evaluation_records = []
+    print(f"[*] Starting evaluation of {len(benchmark_queries)} benchmark queries...")
     
-    for i, q in enumerate(questions):
-        print(f"  -> Q{i+1}: {q}")
+    for idx, query in enumerate(benchmark_queries):
+        print(f"  -> [{idx+1}/{len(benchmark_queries)}] Query: '{query}'")
         
-        # Flat RAG
-        flat_ans = flat_rag.answer(q) if flat_rag else "FlatRAG Not Initialized"
+        # Query Standard Vector RAG
+        flat_reply = standard_rag_engine.generate_response(query) if standard_rag_engine else "StandardRAG not initialized"
         
-        # Graph RAG
-        graph_ans = graph_rag.answer(q) if graph_rag else "GraphRAG Not Initialized"
+        # Query Knowledge Graph RAG
+        graph_reply = graph_rag_engine.generate_response(query) if graph_rag_engine else "KnowledgeRAG not initialized"
         
-        results.append({
-            "question": q,
-            "flat_rag_answer": flat_ans,
-            "graph_rag_answer": graph_ans,
-            "note": "" # Cột trống cho user điền
+        evaluation_records.append({
+            "question": query,
+            "flat_rag_answer": flat_reply,
+            "graph_rag_answer": graph_reply,
+            "note": ""  # Left empty for custom analysis notes
         })
         
-    df = pd.DataFrame(results)
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    df.to_csv(output_path, index=False, encoding='utf-8-sig')
-    print(f"[*] Evaluation completed. Results saved to {output_path}")
+    dataframe = pd.DataFrame(evaluation_records)
+    os.makedirs(os.path.dirname(output_csv_path), exist_ok=True)
+    dataframe.to_csv(output_csv_path, index=False, encoding='utf-8-sig')
+    print(f"[*] Benchmark evaluation complete. Data saved to: {output_csv_path}")

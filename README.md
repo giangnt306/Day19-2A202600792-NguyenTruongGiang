@@ -1,81 +1,88 @@
-# Thực nghiệm Lab Day 19: Nghiên cứu So sánh giữa GraphRAG và Flat RAG trên dữ liệu Doanh nghiệp Công nghệ
+# Dự án Đối chiếu và Thực nghiệm: Knowledge Graph RAG vs Flat Vector RAG
+**Sinh viên thực hiện:** Nguyễn Trường Giang  
+**MSSV:** 2A202600792  
 
-Hệ thống Retrieval-Augmented Generation (RAG) này được thiết lập nhằm phân tích, đánh giá và đối chiếu hiệu quả truy xuất thông tin giữa hai kỹ thuật phổ biến:
-1. **Flat RAG (RAG truyền thống)**: Ứng dụng Cơ sở dữ liệu Vector (`faiss-cpu`) kết hợp mô hình trích xuất đặc trưng (`sentence-transformers`) để truy vấn các đoạn văn bản tương đồng.
-2. **GraphRAG (RAG trên Đồ thị)**: Thiết lập Đồ thị Tri thức (Knowledge Graph) từ ngữ liệu thô (sử dụng Gemini API để trích xuất và thư viện `networkx` để kiến thiết đồ thị), sau đó thực hiện tìm kiếm và mở rộng ngữ cảnh qua các liên kết láng giềng trong phạm vi 2-hop.
+---
 
-## Cấu trúc thư mục
+Dự án này tập trung triển khai và so sánh hiệu quả tìm kiếm, truy xuất thông tin giữa hai kiến trúc phổ biến trong các hệ thống RAG (Retrieval-Augmented Generation):
+1.  **Flat Vector RAG (Standard RAG):** Sử dụng thư viện `faiss-cpu` để lập chỉ mục phẳng vector, kết hợp mô hình cục bộ `sentence-transformers` nhằm tính toán độ tương đồng cosine ngữ nghĩa giữa truy vấn và ngữ liệu thô.
+2.  **Knowledge Graph RAG (GraphRAG):** Rút trích các thực thể và mối quan hệ (triples) thông qua OpenAI API, xây dựng đồ thị tri thức đa chiều bằng thư viện `networkx`, sau đó truy xuất mở rộng 2-hop lân cận để cung cấp ngữ cảnh trả lời có cấu trúc và logic chặt chẽ.
+
+## Sơ đồ Cấu trúc Dự án
 
 ```text
 .
-├── .env                    # Tệp lưu cấu hình khóa API (OPENAI_API_KEY)
-├── .env.example            # Tệp cấu hình mẫu
-├── main.py                 # Tệp khởi chạy chính của chương trình
-├── README.md               # Tài liệu hướng dẫn chi tiết
-├── requirements.txt        # Danh sách các thư viện Python cần cài đặt
+├── .env                    # Lưu khóa cấu hình API (OPENAI_API_KEY)
+├── .env.example            # Bản tệp mẫu cho các cấu hình môi trường
+├── main.py                 # Điểm khởi chạy chính và giao diện dòng lệnh
+├── README.md               # Hướng dẫn chi tiết dự án
+├── requirements.txt        # Danh sách thư viện và dependencies cần thiết
 ├── data/
-│   └── dataset/            # Thư mục lưu trữ tập dữ liệu corpus dạng văn bản (.txt)
-├── outputs/                # Thư mục tự động xuất kết quả thực nghiệm
-│   ├── analysis.md         # Phân tích tổng quan chi phí thời gian và API Token
-│   ├── evaluation.csv      # Bảng kết quả benchmark 20 câu hỏi (dạng CSV)
-│   ├── evaluation.md       # Bảng đánh giá và đối chiếu kết quả (dạng Markdown)
-│   ├── graph.json          # Cấu trúc đồ thị tri thức dưới dạng Node-Link JSON
-│   ├── knowledge_graph.png # Biểu đồ trực quan hóa đồ thị tri thức (Top 50 nodes)
-│   └── triples.json        # Bản lưu cache các quan hệ (Subject - Relation - Object)
-├── src/
-│   ├── data_loader.py      # Bộ nạp và tiền xử lý dữ liệu đầu vào
-│   ├── entity_extractor.py # Module phân tách thực thể và quan hệ từ văn bản
-│   ├── evaluator.py        # Module chạy thử nghiệm benchmark và so sánh
-│   ├── flat_rag.py         # Cài đặt thuật toán Flat RAG
-│   ├── graph_builder.py    # Xây dựng cấu trúc đồ thị tri thức
-│   ├── graph_rag.py        # Cài đặt thuật toán truy vấn GraphRAG
-│   └── visualizer.py       # Trực quan hóa và vẽ đồ thị thành tệp hình ảnh
+│   └── dataset/            # Chứa các tài liệu ngữ liệu định dạng .txt
+├── outputs/                # Thư mục xuất các kết quả phân tích thực nghiệm
+│   ├── analysis.md         # Báo cáo đánh giá chi phí tài nguyên và thời gian
+│   ├── evaluation.csv      # Bảng ghi nhận kết quả đánh giá 20 câu hỏi (CSV)
+│   ├── evaluation.md       # So sánh đối chiếu hiệu năng chi tiết giữa 2 RAG
+│   ├── graph.json          # Đồ thị tri thức được lưu trữ dưới dạng Node-Link JSON
+│   ├── knowledge_graph.png # Biểu đồ trực quan hóa đồ thị (Top 50 nodes lớn nhất)
+│   └── triples.json        # Bản lưu cache các quan hệ bóc tách từ tài liệu
+└── src/
+    ├── loader.py           # Quản lý nạp tài liệu và giải nén dữ liệu mẫu
+    ├── extractor.py        # Module bóc tách thực thể - quan hệ sử dụng LLM
+    ├── builder.py          # Thiết lập cấu trúc đồ thị từ các bộ ba triples
+    ├── plot.py             # Vẽ đồ thị tri thức ra định dạng hình ảnh Matplotlib
+    ├── rag_flat.py         # Quy trình Flat Vector RAG
+    ├── rag_graph.py        # Quy trình Graph-based RAG
+    └── evaluation.py       # Kịch bản chạy đánh giá benchmark tự động
 ```
 
-## Quy trình triển khai
+## Các Bước Triển Khai Thực Nghiệm
 
-### Bước 1: Khởi tạo Môi trường ảo và Cài đặt Thư viện
+### Bước 1: Chuẩn bị Môi trường và Dependencies
 
+Khởi tạo môi trường ảo Python và tiến hành cài đặt các thư viện cần thiết:
 ```bash
-# Tạo môi trường ảo mới
+# Tạo môi trường ảo
 python -m venv venv
 
-# Kích hoạt môi trường ảo (Windows)
-venv\Scripts\activate
+# Kích hoạt môi trường ảo
+source venv/bin/activate  # Trên Linux/macOS
+# Hoặc: venv\Scripts\activate  # Trên Windows
 
-# Cài đặt toàn bộ các gói thư viện cần thiết
+# Cài đặt toàn bộ dependencies
 pip install -r requirements.txt
 ```
 
-### Bước 2: Cài đặt Biến Môi trường
+### Bước 2: Thiết lập Cấu hình API
 
-Tạo tệp cấu hình `.env` dựa trên tệp mẫu `.env.example` và thiết lập khóa API OpenAI của bạn:
+Sao chép tệp cấu hình mẫu `.env.example` thành tệp hoạt động thực tế `.env`:
 ```bash
 cp .env.example .env
 ```
-Mở tệp `.env` vừa tạo và điền thông tin: `OPENAI_API_KEY=your_openai_api_key_here`
+Mở tệp `.env` vừa tạo và cập nhật khóa OpenAI của bạn:
+`OPENAI_API_KEY=your_openai_api_key_here`
 
-### Bước 3: Thiết lập Tập dữ liệu
+### Bước 3: Đặt Dữ liệu Ngữ liệu
 
-Người dùng có thể thực hiện theo một trong hai cách:
-- **Cách 1**: Di chuyển tệp nén `dataset.zip` vào thư mục `data/`. Hệ thống sẽ tự động nhận diện và giải nén khi chạy chương trình.
-- **Cách 2**: Giải nén thủ công và đặt toàn bộ các tệp `.txt` vào trong thư mục `data/dataset/`.
+Có hai cách để chuẩn bị dữ liệu đầu vào:
+*   **Cách 1:** Di chuyển file nén dữ liệu `dataset.zip` vào thư mục `data/`. Hệ thống sẽ tự động nhận diện và giải nén khi khởi động chương trình.
+*   **Cách 2:** Đặt trực tiếp các file văn bản (.txt) của bạn vào thư mục `data/dataset/`.
 
-### Bước 4: Vận hành chương trình
+### Bước 4: Vận hành và Chạy Thử nghiệm
 
+Khởi chạy menu dòng lệnh bằng lệnh sau:
 ```bash
 python main.py
 ```
-Giao diện bảng chọn (Menu) sẽ hiển thị với các tùy chọn sau:
-1. **Build pipeline**: Chạy toàn bộ quy trình từ tải dữ liệu, bóc tách quan hệ triples, xây dựng đồ thị, trực quan hóa và lập chỉ mục Vector.
-2. **Ask with Flat RAG**: Thử nghiệm truy vấn bằng mô hình Flat RAG.
-3. **Ask with GraphRAG**: Thử nghiệm truy vấn bằng mô hình GraphRAG.
-4. **Run evaluation**: Thực hiện đánh giá so sánh tự động trên bộ 20 câu hỏi và lưu kết quả.
-5. **Exit**: Thoát chương trình.
+Giao diện điều khiển bao gồm 5 tùy chọn tương tác:
+1.  **Build and Run Pipeline:** Chạy toàn bộ quy trình tiền xử lý, rút trích triples, thiết lập KG, lưu đồ thị dạng ảnh và lập chỉ mục Vector RAG.
+2.  **Retrieve and Answer using Flat Vector RAG:** Nhập câu hỏi và kiểm tra phản hồi từ Standard RAG.
+3.  **Retrieve and Answer using Knowledge Graph RAG:** Nhập câu hỏi và kiểm tra phản hồi từ GraphRAG.
+4.  **Perform Benchmark Evaluation:** Chạy thử nghiệm trên bộ 20 câu hỏi so sánh và xuất báo cáo tự động.
+5.  **Exit Program:** Thoát chương trình.
 
-## Kết quả cần bàn giao
-1. Toàn bộ mã nguồn dự án.
-2. Biểu đồ trực quan hóa đồ thị tri thức: `outputs/knowledge_graph.png`.
-3. Bảng kết quả đánh giá thực nghiệm: `outputs/evaluation.csv` và `outputs/evaluation.md`.
-4. **Báo cáo phân tích ngắn gọn**: Nội dung chi tiết tại `outputs/analysis.md` so sánh rõ ưu nhược điểm của hai giải pháp. Flat RAG chiếm ưu thế về thời gian và chi phí vận hành nhưng dễ gặp lỗi ảo giác ngữ cảnh. GraphRAG tối ưu về tính chính xác và khả năng kết nối tri thức phức tạp nhưng tốn kém tài nguyên API và thời gian khởi tạo.
-
+## Danh sách Tài liệu Bàn giao (Deliverables)
+1.  Toàn bộ mã nguồn hoàn chỉnh đã được tái cấu trúc (`main.py`, thư mục `src/`, `requirements.txt`).
+2.  Sơ đồ trực quan hóa đồ thị tri thức: `outputs/knowledge_graph.png`.
+3.  Bảng thống kê kết quả benchmark 20 câu hỏi: `outputs/evaluation.csv` và `outputs/evaluation.md`.
+4.  Báo cáo phân tích chi phí thời gian và token: `outputs/analysis.md`.

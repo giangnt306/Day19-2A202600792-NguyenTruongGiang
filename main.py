@@ -1,105 +1,103 @@
 import os
 import sys
 
-from src.flat_rag import FlatRAG
-from src.graph_rag import GraphRAG
-from src.data_loader import load_data, create_dummy_dataset
-from src.entity_extractor import extract_all_documents
-from src.graph_builder import build_knowledge_graph, load_knowledge_graph
-from src.visualizer import visualize_graph
-from src.evaluator import run_evaluation
+from src.rag_flat import StandardRAG
+from src.rag_graph import KnowledgeRAG
+from src.loader import read_corpus, generate_test_dataset
+from src.extractor import process_corpus
+from src.builder import construct_kg, read_kg
+from src.plot import plot_kg
+from src.evaluation import evaluate_systems
 
-def print_menu():
-    print("\n" + "="*40)
-    print("   LAB DAY 19: GRAPH RAG vs FLAT RAG")
-    print("="*40)
-    print("1. Build pipeline (Load data, Extract Triples, Build Graph, Index FlatRAG)")
-    print("2. Ask with Flat RAG")
-    print("3. Ask with GraphRAG")
-    print("4. Run evaluation (20 benchmark questions)")
-    print("5. Exit")
-    print("="*40)
+def show_options():
+    print("\n" + "="*45)
+    print("      LAB WORK: KNOWLEDGE GRAPH RAG COMPARISON")
+    print("="*45)
+    print("1. Build and Run Pipeline (Extract Triples, KG, Flat Index)")
+    print("2. Retrieve and Answer using Flat Vector RAG")
+    print("3. Retrieve and Answer using Knowledge Graph RAG")
+    print("4. Perform Benchmark Evaluation (20-Question Set)")
+    print("5. Exit Program")
+    print("="*45)
 
 def main():
-    flat_rag = None
-    graph_rag = None
+    standard_rag = None
+    knowledge_rag = None
     
     while True:
-        print_menu()
-        choice = input("Enter your choice (1-5): ").strip()
+        show_options()
+        user_choice = input("Select an option (1-5): ").strip()
         
-        if choice == '1':
+        if user_choice == '1':
             try:
-                print("\n--- STEP 1: LOAD DATA ---")
+                print("\n--- STAGE 1: LOADING RAW CORPUS ---")
                 try:
-                    docs = load_data()
+                    documents = read_corpus()
                 except FileNotFoundError:
-                    print("[!] Dataset missing. Auto-creating dummy dataset for testing...")
-                    create_dummy_dataset()
-                    docs = load_data()
+                    print("[!] Corpus not found. Auto-generating test sample data...")
+                    generate_test_dataset()
+                    documents = read_corpus()
                     
-                print("\n--- STEP 2: EXTRACT ENTITIES & RELATIONS ---")
-                triples = extract_all_documents(docs)
+                print("\n--- STAGE 2: EXTRACTING RELATION TRIPLES ---")
+                triples = process_corpus(documents)
                 
-                print("\n--- STEP 3: BUILD KNOWLEDGE GRAPH ---")
-                G = build_knowledge_graph(triples)
+                print("\n--- STAGE 3: CONSTRUCTING KNOWLEDGE GRAPH ---")
+                kg_graph = construct_kg(triples)
                 
-                print("\n--- STEP 4: VISUALIZE GRAPH ---")
-                visualize_graph(G)
+                print("\n--- STAGE 4: EXPORTING GRAPH VISUALIZATION ---")
+                plot_kg(kg_graph)
                 
-                print("\n--- STEP 5: BUILD FLAT RAG INDEX ---")
-                flat_rag = FlatRAG()
-                flat_rag.build_index(docs)
+                print("\n--- STAGE 5: INDEXING FLAT VECTOR RAG ---")
+                standard_rag = StandardRAG()
+                standard_rag.build_index(documents)
                 
-                # Init GraphRAG
-                graph_rag = GraphRAG(G)
-                print("\n[*] PIPELINE BUILD SUCCESSFUL!")
+                # Instantiate Knowledge Graph RAG
+                knowledge_rag = KnowledgeRAG(kg_graph)
+                print("\n[*] PIPELINE REBUILT SUCCESSFULLY!")
                 
-            except Exception as e:
-                print(f"[!] Pipeline Error: {e}")
+            except Exception as err:
+                print(f"[!] Pipeline Execution Error: {err}")
                 
-        elif choice == '2':
-            if not flat_rag:
-                print("[!] Flat RAG is not initialized. Please run Build pipeline (1) first.")
+        elif user_choice == '2':
+            if not standard_rag:
+                print("[!] Standard RAG is not initialized. Please build the pipeline (1) first.")
                 continue
-            q = input("Enter question for Flat RAG: ")
-            ans = flat_rag.answer(q)
-            print(f"\n[Flat RAG Answer]:\n{ans}\n")
+            question = input("Enter query for Standard RAG: ")
+            reply = standard_rag.generate_response(question)
+            print(f"\n[Standard RAG Response]:\n{reply}\n")
             
-        elif choice == '3':
-            if not graph_rag:
-                print("[!] GraphRAG is not initialized. Please run Build pipeline (1) first.")
+        elif user_choice == '3':
+            if not knowledge_rag:
+                print("[!] Knowledge Graph RAG is not initialized. Please build the pipeline (1) first.")
                 continue
-            q = input("Enter question for GraphRAG: ")
-            ans = graph_rag.answer(q)
-            print(f"\n[GraphRAG Answer]:\n{ans}\n")
+            question = input("Enter query for Knowledge Graph RAG: ")
+            reply = knowledge_rag.generate_response(question)
+            print(f"\n[Knowledge Graph RAG Response]:\n{reply}\n")
             
-        elif choice == '4':
-            if not flat_rag or not graph_rag:
-                print("[!] RAG systems not initialized. Run pipeline (1) first or loading from files is required.")
-                print("[*] Automatically building pipeline to run evaluation...")
-                # Try simple load
+        elif user_choice == '4':
+            if not standard_rag or not knowledge_rag:
+                print("[!] RAG systems not fully loaded. Attempting automatic build from cached files...")
                 try:
-                    docs = load_data()
-                    flat_rag = FlatRAG()
-                    flat_rag.build_index(docs)
-                    G = load_knowledge_graph()
-                    if not G:
-                        print("[!] Knowledge graph not found. Please run Option 1 first.")
+                    documents = read_corpus()
+                    standard_rag = StandardRAG()
+                    standard_rag.build_index(documents)
+                    kg_graph = read_kg()
+                    if not kg_graph:
+                        print("[!] Knowledge graph cache missing. Please run option 1 first.")
                         continue
-                    graph_rag = GraphRAG(G)
-                except Exception as e:
-                    print(f"Cannot auto-build: {e}")
+                    knowledge_rag = KnowledgeRAG(kg_graph)
+                except Exception as err:
+                    print(f"[!] Auto-initialization failed: {err}")
                     continue
                     
-            run_evaluation(flat_rag, graph_rag)
+            evaluate_systems(standard_rag, knowledge_rag)
             
-        elif choice == '5':
-            print("Exiting...")
+        elif user_choice == '5':
+            print("Exiting application...")
             sys.exit(0)
             
         else:
-            print("Invalid choice. Try again.")
+            print("Selection invalid. Please choose from 1 to 5.")
 
 if __name__ == "__main__":
     main()
