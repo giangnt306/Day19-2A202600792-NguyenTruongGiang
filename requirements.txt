@@ -1,0 +1,8 @@
+networkx
+matplotlib
+pandas
+numpy
+faiss-cpu
+sentence-transformers
+openai
+python-dotenv
